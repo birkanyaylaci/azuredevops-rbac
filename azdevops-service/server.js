@@ -9,27 +9,26 @@ const port = 3001;
 app.use(cors());
 app.use(express.json());
 
-
 const redis = new Redis({
   host: process.env.REDIS_HOST || 'localhost',
   port: 6379,
 });
 
-// Azure DevOps Server bilgileri
+// Azure DevOps Server 
 const configServer = {
   organization: process.env.AZDEVOPS_ORG_SERVER,
   serverUrl: process.env.AZDEVOPS_URL_SERVER,
   personalAccessToken: process.env.AZDEVOPS_PAT_SERVER
 };
 
-// Azure DevOps Services bilgileri
+// Azure DevOps Services
 const configService = {
   organization: process.env.AZDEVOPS_ORG_SERVICE,
   serverUrl: process.env.AZDEVOPS_URL_SERVICE,
   personalAccessToken: process.env.AZDEVOPS_PAT_SERVICE
 };
 
-// API için temel axios instance'ı
+
 const createApiInstance = (config) => axios.create({
   baseURL: `${config.serverUrl}/${config.organization}`,
   headers: {
@@ -44,7 +43,7 @@ const getConfig = (environment) => {
   } else if (environment === 'services') {
     return configService;
   } else {
-    throw new Error('Geçersiz ortam seçimi');
+    throw new Error('Invalid environment selection');
   }
 };
 
@@ -53,23 +52,23 @@ async function getProjects(environment) {
   const api = createApiInstance(config);
   const cacheKey = `projects:${environment}`;
   try {
-    // Önce Redis'ten veriyi kontrol et
+    // Check data from Redis first
     const cachedData = await redis.get(cacheKey);
     if (cachedData) {
-      console.log('Projeler Redis önbellekten alındı');
+      console.log('Projects retrieved from Redis cache');
       return JSON.parse(cachedData);
     }
 
-    console.log('Projeler API\'dan alınıyor...');
+    console.log('Fetching projects from API...');
     const response = await api.get('/_apis/projects?api-version=6.0');
     const projects = response.data.value;
 
-    // Veriyi Redis'e kaydet (1 saat süreyle)
+    // Save data to Redis (for 1 hour)
     await redis.set(cacheKey, JSON.stringify(projects), 'EX', 3600);
     
     return projects;
   } catch (error) {
-    console.error('Projeler alınırken hata oluştu:', error.message);
+    console.error('Error occurred while fetching projects:', error.message);
     throw error;
   }
 }
@@ -81,11 +80,11 @@ async function getProjectGroups(environment, projectId) {
   try {
     const cachedData = await redis.get(cacheKey);
     if (cachedData) {
-      console.log(`${projectId} projesi için gruplar Redis önbellekten alındı`);
+      console.log(`Groups for project ${projectId} retrieved from Redis cache`);
       return JSON.parse(cachedData);
     }
 
-    console.log(`${projectId} projesi için gruplar API'dan alınıyor...`);
+    console.log(`Fetching groups for project ${projectId} from API...`);
     const response = await api.get(`/${projectId}/_api/_identity/ReadScopedApplicationGroupsJson?__v=5`);
     const groups = response.data.identities;
 
@@ -93,7 +92,7 @@ async function getProjectGroups(environment, projectId) {
     
     return groups;
   } catch (error) {
-    console.error(`${projectId} projesi için gruplar alınırken hata oluştu:`, error.message);
+    console.error(`Error occurred while fetching groups for project ${projectId}:`, error.message);
     throw error;
   }
 }
@@ -105,11 +104,11 @@ async function getGroupMembers(environment, projectId, teamFoundationId) {
   try {
     const cachedData = await redis.get(cacheKey);
     if (cachedData) {
-      console.log(`${projectId} projesi için ${teamFoundationId} grubu üyeleri Redis önbellekten alındı`);
+      console.log(`Members of group ${teamFoundationId} for project ${projectId} retrieved from Redis cache`);
       return JSON.parse(cachedData);
     }
 
-    console.log(`${projectId} projesi için ${teamFoundationId} grubu üyeleri API'dan alınıyor...`);
+    console.log(`Fetching members of group ${teamFoundationId} for project ${projectId} from API...`);
     const response = await api.get(`/${projectId}/_api/_identity/ReadGroupMembers?__v=5&scope=${teamFoundationId}&readMembers=true`);
     const members = response.data.identities;
 
@@ -117,7 +116,7 @@ async function getGroupMembers(environment, projectId, teamFoundationId) {
     
     return members;
   } catch (error) {
-    console.error(`${projectId} projesi için ${teamFoundationId} grubu üyeleri alınırken hata oluştu:`, error.message);
+    console.error(`Error occurred while fetching members of group ${teamFoundationId} for project ${projectId}:`, error.message);
     throw error;
   }
 }
@@ -125,12 +124,12 @@ async function getGroupMembers(environment, projectId, teamFoundationId) {
 app.get('/api/projects', async (req, res) => {
   try {
     const environment = req.query.environment;
-    console.log('GET /api/projects isteği alındı');
+    console.log('GET /api/projects request received');
     const projects = await getProjects(environment);
     res.json(projects);
   } catch (error) {
-    console.error('Projeler alınırken bir hata oluştu:', error);
-    res.status(500).json({ error: 'Projeler alınırken bir hata oluştu.', details: error.message });
+    console.error('An error occurred while fetching projects:', error);
+    res.status(500).json({ error: 'An error occurred while fetching projects.', details: error.message });
   }
 });
 
@@ -138,13 +137,13 @@ app.get('/api/data/:projectId', async (req, res) => {
   try {
     const environment = req.query.environment;
     const projectId = req.params.projectId;
-    console.log(`GET /api/data/${projectId} isteği alındı`);
+    console.log(`GET /api/data/${projectId} request received`);
     
     const projects = await getProjects(environment);
     const project = projects.find(p => p.id === projectId);
     
     if (!project) {
-      return res.status(404).json({ error: 'Proje bulunamadı.' });
+      return res.status(404).json({ error: 'Project not found.' });
     }
 
     let results = [];
@@ -165,27 +164,27 @@ app.get('/api/data/:projectId', async (req, res) => {
           });
         }
       } catch (memberError) {
-        console.error(`${project.name} projesi için ${group.FriendlyDisplayName} grubu üyeleri alınırken hata oluştu:`, memberError);
+        console.error(`Error occurred while fetching members of group ${group.FriendlyDisplayName} for project ${project.name}:`, memberError);
       }
     }
 
-    console.log('Toplam sonuç sayısı:', results.length);
+    console.log('Total number of results:', results.length);
     res.json(results);
   } catch (error) {
-    console.error('Veri alınırken bir hata oluştu:', error);
-    res.status(500).json({ error: 'Veri alınırken bir hata oluştu.', details: error.message });
+    console.error('An error occurred while fetching data:', error);
+    res.status(500).json({ error: 'An error occurred while fetching data.', details: error.message });
   }
 });
 
 app.get('/api/all-members', async (req, res) => {
   try {
     const environment = req.query.environment;
-    console.log('GET /api/all-members isteği alındı');
+    console.log('GET /api/all-members request received');
     const projects = await getProjects(environment);
     let results = [];
 
     for (const project of projects) {
-      console.log(`İşleniyor: ${project.name}`);
+      console.log(`Processing: ${project.name}`);
       try {
         const groups = await getProjectGroups(environment, project.id);
 
@@ -204,19 +203,19 @@ app.get('/api/all-members', async (req, res) => {
               });
             }
           } catch (memberError) {
-            console.error(`${project.name} projesi için ${group.FriendlyDisplayName} grubu üyeleri alınırken hata oluştu:`, memberError);
+            console.error(`Error occurred while fetching members of group ${group.FriendlyDisplayName} for project ${project.name}:`, memberError);
           }
         }
       } catch (groupError) {
-        console.error(`${project.name} projesi için gruplar alınırken hata oluştu:`, groupError);
+        console.error(`Error occurred while fetching groups for project ${project.name}:`, groupError);
       }
     }
 
-    console.log('Toplam sonuç sayısı:', results.length);
+    console.log('Total number of results:', results.length);
     res.json(results);
   } catch (error) {
-    console.error('Veri alınırken bir hata oluştu:', error);
-    res.status(500).json({ error: 'Veri alınırken bir hata oluştu.', details: error.message });
+    console.error('An error occurred while fetching data:', error);
+    res.status(500).json({ error: 'An error occurred while fetching data.', details: error.message });
   }
 });
 
@@ -226,33 +225,32 @@ app.post('/api/remove-member', async (req, res) => {
     const config = getConfig(environment);
     const api = createApiInstance(config);
 
-    console.log(`POST /api/remove-member isteği alındı - Project: ${projectId}, Group: ${groupId}, Member: ${memberId}`);
+    console.log(`POST /api/remove-member request received - Project: ${projectId}, Group: ${groupId}, Member: ${memberId}`);
 
     const response = await api.post(`/${projectId}/_api/_identity/EditMembership?__v=5`, {
       editMembers: "true",
       groupId: groupId,
-      removeItemsJson: `[\"${memberId}\"]`
+      removeItemsJson: `["${memberId}"]`
     });
 
     if (response.status === 200) {
-      console.log('Üye başarıyla silindi');
+      console.log('Member successfully removed');
 
-      // Redis'ten ilgili kaydı sil
+      // Delete the relevant record from Redis
       const cacheKey = `members:${environment}:${projectId}:${groupId}`;
       await redis.del(cacheKey);
 
-      res.status(200).json({ message: 'Üye başarıyla silindi ve Redis önbelleği temizlendi' });
+      res.status(200).json({ message: 'Member successfully removed and Redis cache cleared' });
     } else {
-      console.error('Üye silinirken bir hata oluştu:', response.status, response.data);
-      res.status(response.status).json({ error: 'Üye silinirken bir hata oluştu' });
+      console.error('An error occurred while removing member:', response.status, response.data);
+      res.status(response.status).json({ error: 'An error occurred while removing member' });
     }
   } catch (error) {
-    console.error('Üye silinirken bir hata oluştu:', error);
-    res.status(500).json({ error: 'Üye silinirken bir hata oluştu', details: error.message });
+    console.error('An error occurred while removing member:', error);
+    res.status(500).json({ error: 'An error occurred while removing member', details: error.message });
   }
 });
 
-
 app.listen(port, () => {
-  console.log(`Server ${port} portunda çalışıyor`);
+  console.log(`Server running on port ${port}`);
 });
