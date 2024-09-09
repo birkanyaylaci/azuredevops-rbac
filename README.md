@@ -6,9 +6,8 @@
 
 ## Getting Started
 To start the application, run the following command:
-```sh
+
 ENV_FILE=.env.dev docker-compose up --build -d
-sh
 
 ## Features
 This application provides the following features:
