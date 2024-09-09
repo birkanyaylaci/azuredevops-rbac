@@ -6,9 +6,9 @@
 
 ## Getting Started
 To start the application, run the following command:
-
+```sh
 ENV_FILE=.env.prod docker-compose up --build -d
-
+```
 ## Azure DevOps Project Authorization Management:
 Manage authorizations on a project basis.
 Easily view which projects a user has access to.
