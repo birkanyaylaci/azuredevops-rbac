@@ -9,9 +9,6 @@ To start the application, run the following command:
 
 ENV_FILE=.env.dev docker-compose up --build -d
 
-## Features
-This application provides the following features:
-
 ## Azure DevOps Project Authorization Management:
 Manage authorizations on a project basis.
 Easily view which projects a user has access to.
@@ -23,7 +20,7 @@ View the number of users and projects actively.
 ## Dual Management for Azure DevOps Server and Services:
 Manage both Azure DevOps Server and Azure DevOps Services separately.
 
-##Export to Excel:
+## Export to Excel:
 Export the displayed list to an Excel file for further analysis or reporting.
 
 ## Usage
